@@ -1,7 +1,7 @@
 require File.join(File.dirname(__FILE__), "..", "lib", "ey_logger.rb")
 Capistrano::Configuration.instance(:must_exist).load do
-  
-  namespace :deploy do    
+
+  namespace :deploy do
     # This is here to hook into the logger for deploy and deploy:long tasks
     ["deploy", "deploy:long"].each do |tsk|
       before(tsk) do
@@ -28,7 +28,7 @@ Capistrano::Configuration.instance(:must_exist).load do
       too. You can also specify additional environment variables to pass to rake \
       via the migrate_env variable. Finally, you can specify the full path to the \
       rake executable by setting the rake variable. The defaults are:
- 
+
       set :rake, "rake"
       set :framework, "merb"
       set :merb_env, "production"
@@ -37,26 +37,31 @@ Capistrano::Configuration.instance(:must_exist).load do
     DESC
     task :migrate, :roles => :db, :only => { :primary => true } do
       rake = fetch(:rake, "rake")
-      
+
       framework = fetch(:framework, "rails")
       if framework.match(/^rails$/i)
         app_env = fetch(:rails_env, "production")
       else
         app_env = fetch("#{framework.downcase}_env".to_sym, "production")
       end
-      
+
       migrate_env = fetch(:migrate_env, "")
       migrate_target = fetch(:migrate_target, :latest)
- 
+
       directory = case migrate_target.to_sym
         when :current then current_path
         when :latest then current_release
         else raise ArgumentError, "unknown migration target #{migrate_target.inspect}"
         end
- 
-      run "if [ -f #{release_path}/Gemfile ] ; then cd #{directory}; bundle exec #{rake} #{framework.upcase}_ENV=#{app_env} #{migrate_env} db:migrate ; else cd #{directory}; #{rake} #{framework.upcase}_ENV=#{app_env} #{migrate_env} db:migrate ; fi"
+
+        command = if Gem.loaded_specs['bundler'] && Gem.loaded_specs['bundler'].version >= Gem::Version.create('1.0.8')
+          "#{rake}"
+        else
+          "bundle exec #{rake}"
+        end
+        run "if [ -f #{release_path}/Gemfile ] ; then cd #{directory}; #{command} #{framework.upcase}_ENV=#{app_env} #{migrate_env} db:migrate ; else cd #{directory}; #{rake} #{framework.upcase}_ENV=#{app_env} #{migrate_env} db:migrate ; fi"
     end
-  
+
     desc "Display the maintenance.html page while deploying with migrations. Then it restarts and enables the site again."
     task :long do
       transaction do
@@ -65,7 +70,7 @@ Capistrano::Configuration.instance(:must_exist).load do
         symlink
         migrate
       end
-  
+
       restart
       web.enable
     end
@@ -83,13 +88,13 @@ Capistrano::Configuration.instance(:must_exist).load do
     desc "Start the Mongrel processes on the app slices."
     task :start, :roles => :app do
       mongrel.start
-    end    
-    
+    end
+
     desc "Stop the Mongrel processes on the app slices."
     task :stop, :roles => :app do
       mongrel.stop
     end
-    
+
     namespace :web do
       desc <<-DESC
         Present a maintenance page to visitors. Disables your application's web \
